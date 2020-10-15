@@ -3,7 +3,7 @@
 
 #include <stdexcept>
 
-#include "RawSocket.h"
+#include "Pcap.h"
 
 struct IpException : std::runtime_error
 {
@@ -13,13 +13,13 @@ struct IpException : std::runtime_error
 class Ip
 {
 public:
-	Ip(RawSocket *sock);
+	Ip(Pcap *pcap);
 
 	void send(std::vector<uint8_t> data);
 	std::vector<uint8_t> receive(void);
 
 private:
-	RawSocket *sock;
+	Pcap *pcap;
 };
 
 #endif

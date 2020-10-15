@@ -1,16 +1,24 @@
 
+#include <chrono>
+#include <thread>
+
 #include "VectorUtility.h"
-#include "RawSocket.h"
+#include "Pcap.h"
 #include "Ip.h"
+#include "Tcp.h"
 
 
 int main(void)
 {
-	RawSocket sock;
-	Ip ip(&sock);
+	Pcap pcap;
+	Ip ip(&pcap);
+	Tcp tcp(&ip, 9000, true);
 
-	//ip.send({0});
-	VectorUtility::print(ip.receive(),true);
+	while(true)
+	{
+		tcp.process();
+		std::this_thread::sleep_for(std::chrono::milliseconds(100));
+	}
 
 	return 0;
 }

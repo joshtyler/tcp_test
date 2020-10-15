@@ -1,6 +1,6 @@
 CC=g++
 CXXFLAGS=-c -Wall -Wextra  -g --std=c++17
-LDFLAGS=
+LDFLAGS= -lpcap
 SOURCES=$(wildcard *.cpp)
 OBJECTS=$(SOURCES:.cpp=.o)
 EXECUTABLE=tcp_test

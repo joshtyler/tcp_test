@@ -22,13 +22,15 @@ class RawSocket
 {
 public:
 	RawSocket();
+	~RawSocket();
 
 	void send(std::vector<uint8_t> data);
 
 	std::vector<uint8_t> receive(void);
 
 private:
-	int sock;
+	int rx_sock;
+	int tx_sock;
 	struct sockaddr_ll sock_addr;
 };
 

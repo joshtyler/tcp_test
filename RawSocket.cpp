@@ -4,23 +4,47 @@
 #include <cerrno>
 #include <cstring>
 
+#include <unistd.h>
 #include <arpa/inet.h>
+#include <sys/ioctl.h>
+#include <net/if.h>
+
 
 RawSocket::RawSocket()
 {
-	// Open a raw socket
-	// SOCK_DGRAM to autofill mac
+	// Open the sockets
 	// Can't use IPPROTO_RAW because it doesn't support receive (stackoverflow 40795772)
-	sock = socket(AF_INET, SOCK_RAW, IPPROTO_TCP);
-	if (sock < 0)
+	rx_sock = socket(AF_INET, SOCK_RAW, IPPROTO_TCP);
+	if (rx_sock < 0)
 	{
-		throw RawSocketException("Could not open raw socket: "+std::string(std::strerror(errno)));
+		throw RawSocketException("Could not open socket: "+std::string(std::strerror(errno)));
 	}
 
-	int on = 1;
-	if (setsockopt(sock, IPPROTO_IP, IP_HDRINCL, &on, sizeof(on)) == -1) {
-        throw RawSocketException("Could not setsockopt: "+std::string(std::strerror(errno)));
+	struct sockaddr_ll sll;
+    struct ifreq ifr; bzero(&sll , sizeof(sll));
+    bzero(&ifr , sizeof(ifr));
+    strncpy((char *)ifr.ifr_name ,"lo" , IFNAMSIZ);
+    //copy device name to ifr
+    if((ioctl(rx_sock , SIOCGIFINDEX , &ifr)) == -1)
+    {
+        perror("Unable to find interface index");
+        exit(-1);
     }
+    sll.sll_family = AF_PACKET;
+    sll.sll_ifindex = ifr.ifr_ifindex;
+    sll.sll_protocol = 0x0008; // Ipv4
+    if((bind(rx_sock , (struct sockaddr *)&sll , sizeof(sll))) ==-1)
+    {
+        perror("bind: ");
+        exit(-1);
+    }
+
+	// SOCK_DGRAM to autofill mac
+	tx_sock = socket(AF_PACKET, SOCK_DGRAM, IPPROTO_RAW);
+	if (tx_sock < 0)
+	{
+		throw RawSocketException("Could not open socket: "+std::string(std::strerror(errno)));
+	}
 
 	// Retreive the interaface index for our interface
 	unsigned int if_idx = if_nametoindex("lo");
@@ -28,8 +52,6 @@ RawSocket::RawSocket()
 	{
 		throw RawSocketException("Could not get interface index for interface");
 	}
-
-	/*
 	// Construct our socket address structure
 	sock_addr.sll_ifindex = if_idx; // Interface index
 	sock_addr.sll_halen = ETH_ALEN; // Ethernet address length
@@ -41,27 +63,17 @@ RawSocket::RawSocket()
 	sock_addr.sll_addr[5] = 0xFF;
 
 	sock_addr.sll_protocol= 0x0008; // Ipv4
-	*/
+}
 
-
-	/*
-	struct sockaddr_in sockstr;
-	socklen_t socklen;
-	sockstr.sin_family = AF_INET;
-	sockstr.sin_port = htons(7000);
-	sockstr.sin_addr.s_addr = inet_addr("127.0.0.1");
-	socklen = (socklen_t) sizeof(sockstr);
-
-	if (bind(sock, (struct sockaddr*) &sockstr, socklen) == -1)
-	{
-		throw RawSocketException("Could not bind: "+std::string(std::strerror(errno)));
-	}
-	*/
+RawSocket::~RawSocket()
+{
+	close(rx_sock);
+	close(tx_sock);
 }
 
 void RawSocket::send(std::vector<uint8_t> data)
 {
-	int ret = sendto(sock, data.data(), data.size(), 0, (struct sockaddr*)&sock_addr, sizeof(struct sockaddr_ll));
+	int ret = sendto(tx_sock, data.data(), data.size(), 0, (struct sockaddr*)&sock_addr, sizeof(struct sockaddr_ll));
 	if (ret < 0)
 	{
 		throw RawSocketException("Sending failed: "+std::string(std::strerror(errno)));
@@ -70,20 +82,8 @@ void RawSocket::send(std::vector<uint8_t> data)
 
 std::vector<uint8_t> RawSocket::receive(void)
 {
-	//sockaddr rx_addr;
-	//socklen_t rx_addr_len = sizeof(rx_addr);
 	std::vector<uint8_t> ret(9600);
-	int received_len = recv(sock, ret.data(), ret.size(), 0);
+	int received_len = recv(rx_sock, ret.data(), ret.size(), 0);
 	ret.resize(received_len);
-
-	/*
-	sockaddr_ll *rx_addr_ll = reinterpret_cast<sockaddr_ll *>(&rx_addr);
-
-	if(rx_addr_ll->sll_protocol != 0x0008)
-	{
-		std::cout << "Dropping packet because it is not ipv4" << std::endl;
-		ret.resize(0);
-	}
-	*/
 	return ret;
 }

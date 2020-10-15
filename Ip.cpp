@@ -1,7 +1,11 @@
 #include "Ip.h"
 
-Ip::Ip(RawSocket *sock)
-	:sock(sock)
+#include <iostream>
+
+#include "VectorUtility.h"
+
+Ip::Ip(Pcap *pcap)
+	:pcap(pcap)
 {
 }
 
@@ -49,19 +53,54 @@ void Ip::send(std::vector<uint8_t> data)
 	ip_header[11] = (csum >> 0) & 0xFF;
 
 	data.insert(data.begin(), ip_header.begin(), ip_header.end());
-	sock->send(data);
+
+	// Add on an ethernet header
+	std::vector<uint8_t> eth_header = {0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x08,0x00};
+	data.insert(data.begin(), eth_header.begin(), eth_header.end());
+
+	pcap->send(data);
 }
 
 std::vector<uint8_t> Ip::receive(void)
 {
-	auto vec = sock->receive();
-	if(vec.size() > 0)
+	std::vector<uint8_t> vec;
+	while(true) // Loop until we either have a valid packet, or we timed out
 	{
-		uint16_t header_len = (vec[2] >> 8) | vec[3];
-		if(vec.size() < header_len)
+		vec = pcap->receive();
+		if(vec.size() > 0)
 		{
-			throw IpException("Vector isn't long enough to contain promised header length");
-			vec.erase(vec.begin(),vec.begin()+header_len);
+			// Check if long enough to be an ethernet frame
+			if(vec.size() >= 6*2+2)
+			{
+				//Check if ipv4
+				if(vec[12] == 0x08 && vec[13] == 0x00)
+				{
+					// Erase ethernet header
+					vec.erase(vec.begin(),vec.begin()+6*2+2);
+
+					// Check if TCP
+					if(vec[9] == 0x06)
+					{
+						uint16_t header_len = (vec[0] & 0x0F)*4;
+						if(vec.size() < header_len)
+						{
+							throw IpException("Vector isn't long enough to contain promised header length");
+						}
+						std::cout << "IP Header:";
+						VectorUtility::print(vec,true);
+						std::cout << std::endl;
+						vec.erase(vec.begin(),vec.begin()+header_len);
+						std::cout << "TCP Header:";
+						VectorUtility::print(vec,true);
+						std::cout << std::endl;
+						// We have a valid packet
+						break;
+					}
+				}
+			}
+		} else {
+			// Break if we have run out of packets
+			break;
 		}
 	}
 	return vec;
