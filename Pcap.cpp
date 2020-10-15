@@ -7,7 +7,7 @@ Pcap::Pcap()
 	handle  = pcap_open_live("lo", BUFSIZ, true, 10, errbuf); //10ms timeout
 	if(handle == NULL)
 	{
-		throw PcapException("pcap_open_live returned NULL");
+		throw PcapException("pcap_open_live returned NULL. Message: "+std::string(errbuf));
 	}
 }
 
