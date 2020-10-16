@@ -9,6 +9,30 @@ Tcp::Tcp(Ip *ip, uint16_t local_port, bool server)
 	header.source_port = local_port;
 }
 
+// Calcluate the checksum of just the TCP portion of the pseudo header
+// See https://en.wikipedia.org/wiki/Transmission_Control_Protocol#TCP_checksum_for_IPv4
+static uint16_t calc_partial_checksum(Tcp::Header header)
+{
+    // N.B. We are sort of duplicating the serialise function
+    // TODO Probably needs a refactor
+    auto csum = calc_partial_csum(header.source_port);
+    csum = calc_partial_csum(header.dest_port,csum);
+    csum = calc_partial_csum(header.seq_num,csum);
+    csum = calc_partial_csum(header.ack_num,csum);
+    csum = calc_partial_csum(uint16_t{0x50},csum);
+    uint8_t flags =0;
+    if(header.ack) flags |= 0x10;
+    if(header.rst) flags |= 0x04;
+    if(header.syn) flags |= 0x02;
+    if(header.fin) flags |= 0x01;
+    csum = calc_partial_csum(uint16_t((uint8_t{0x50} << 8) | flags),csum);
+    csum = calc_partial_csum(header.window_size,csum);
+    // Urgent pointer will always be zero
+    // No options
+    return csum;
+
+}
+
 void Tcp::process(void)
 {
 	std::vector<uint8_t> packet;
@@ -31,7 +55,7 @@ void Tcp::process(void)
 					{
 						std::cout << "Got syn" << std::endl;
 						header.dest_port = pkt.first.source_port;
-						header.ack_num = pkt.first.ack_num;
+						header.ack_num = pkt.first.seq_num;
 						header.seq_num = rand() & 0xFFFF;
 						// Send a syn ack
 						header.ack=true;
@@ -39,7 +63,7 @@ void Tcp::process(void)
 						header.syn=true;
 						header.fin=false;
 
-						ip->send(serialise(header));
+                        ip->send_tcp(serialise(header), calc_partial_checksum(header));
 					}
 					break;
 				default:

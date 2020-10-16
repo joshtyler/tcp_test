@@ -16,20 +16,20 @@ public:
 	std::vector<uint8_t> receive(void);
 	void process(void);
 
+    struct Header
+    {
+        uint16_t source_port=0;
+        uint16_t dest_port=0;
+        uint32_t seq_num=0;
+        uint32_t ack_num=0;
+        bool ack=false;
+        bool rst=false;
+        bool syn=false;
+        bool fin=false;
+        uint16_t window_size=0;
+        uint16_t checksum=0;
+    };
 private:
-	struct Header
-	{
-		uint16_t source_port=0;
-		uint16_t dest_port=0;
-		uint16_t seq_num=0;
-		uint16_t ack_num=0;
-		bool ack=false;
-		bool rst=false;
-		bool syn=false;
-		bool fin=false;
-		uint16_t window_size=0;
-		uint16_t checksum=0;
-	};
 
 	Ip *ip;
 
@@ -56,6 +56,8 @@ private:
 	std::pair<Header,std::vector<uint8_t>> deserialise(std::vector<uint8_t> packet);
 
 	std::vector<uint8_t> serialise(Header header, std::vector<uint8_t> data={});
+
+
 };
 
 #endif

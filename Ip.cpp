@@ -2,6 +2,8 @@
 
 #include <iostream>
 
+#include <boost/endian/conversion.hpp>
+
 #include "VectorUtility.h"
 
 Ip::Ip(Pcap *pcap)
@@ -9,7 +11,7 @@ Ip::Ip(Pcap *pcap)
 {
 }
 
-void Ip::send(std::vector<uint8_t> data)
+void Ip::send_tcp(std::vector<uint8_t> data, uint16_t tcp_partial_csum)
 {
 	std::vector<uint8_t> ip_header;
 	ip_header.resize(20); // No options, therefore 20 bytes
@@ -35,18 +37,24 @@ void Ip::send(std::vector<uint8_t> data)
 	ip_header[18] = 0;
 	ip_header[19] = 1;
 
+	// Sort out the TCP pseudo header checksum
+    tcp_partial_csum = calc_partial_csum(uint16_t((ip_header[12] << 8) | ip_header[13]), tcp_partial_csum); // Source addr
+    tcp_partial_csum = calc_partial_csum(uint16_t((ip_header[14] << 8) | ip_header[15]), tcp_partial_csum);
+    tcp_partial_csum = calc_partial_csum(uint16_t((ip_header[16] << 8) | ip_header[17]), tcp_partial_csum); // Dest addr
+    tcp_partial_csum = calc_partial_csum(uint16_t((ip_header[18] << 8) | ip_header[19]), tcp_partial_csum);
+    tcp_partial_csum = calc_partial_csum(uint16_t(ip_header[0]), tcp_partial_csum); // Zeros + prot
+    uint16_t tcp_len = data.size();
+    boost::endian::native_to_big_inplace(tcp_len);
+    tcp_partial_csum = calc_partial_csum(tcp_len, tcp_partial_csum); // TCP length
+    data.at(16) = ((tcp_partial_csum & 0xFF00) >> 16);
+    data.at(17) = tcp_partial_csum & 0xFF;
+
 	// Calculate checksum
 	// N.B. Assuming even length
 	uint16_t csum = 0;
 	for(auto i = 0u; i < ip_header.size(); i+=2)
 	{
-		uint16_t word = (ip_header[i] << 8) | ip_header[i+1];
-		uint32_t res = word + csum;
-		csum = res & 0xFFFF;
-		if(res & 0xFFFF0000)
-		{
-			csum++;
-		}
+		csum = calc_partial_csum(uint16_t((ip_header[i] << 8) | ip_header[i+1]), csum);
 	}
 	csum = ~ csum;
 	ip_header[10] = (csum >> 8) & 0xFF;

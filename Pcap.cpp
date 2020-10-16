@@ -13,7 +13,7 @@ Pcap::Pcap()
 
 Pcap::~Pcap()
 {
-
+    pcap_close(handle);
 }
 
 void Pcap::send(std::vector<uint8_t> data)

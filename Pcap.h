@@ -19,6 +19,9 @@ public:
 	Pcap();
 	~Pcap();
 
+	Pcap(const Pcap &p) = delete;
+    Pcap& operator=(Pcap &p) = delete;
+
 	void send(std::vector<uint8_t> data);
 	std::vector<uint8_t> receive(void);
 
