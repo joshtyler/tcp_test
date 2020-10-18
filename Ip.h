@@ -2,6 +2,8 @@
 #define IP_H
 
 #include <stdexcept>
+#include <ios>
+#include <iostream>
 
 #include "Pcap.h"
 
@@ -25,7 +27,9 @@ private:
 inline uint16_t calc_partial_csum(uint16_t data, uint16_t csum=0)
 {
     uint32_t new_csum = data+csum;
-    return (new_csum & 0xFFFF) + ((new_csum& 0xFFFF0000)? 1 : 0);
+    new_csum = (new_csum & 0xFFFF) + ((new_csum& 0xFFFF0000)? 1 : 0);
+    std::cout << "Calculating csum. Dat 0x" << std::hex << data << " Old 0x" << csum <<  ". New csum 0x" << new_csum << std::endl;
+    return new_csum;
 }
 
 inline uint16_t calc_partial_csum(uint32_t data, uint16_t csum=0)

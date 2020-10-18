@@ -3,6 +3,8 @@
 #include <iostream>
 #include <cassert>
 
+#include <boost/endian/conversion.hpp>
+
 Tcp::Tcp(Ip *ip, uint16_t local_port, bool server)
 	:ip(ip), server(server), state(State::CLOSED)
 {
@@ -19,7 +21,6 @@ static uint16_t calc_partial_checksum(Tcp::Header header)
     csum = calc_partial_csum(header.dest_port,csum);
     csum = calc_partial_csum(header.seq_num,csum);
     csum = calc_partial_csum(header.ack_num,csum);
-    csum = calc_partial_csum(uint16_t{0x50},csum);
     uint8_t flags =0;
     if(header.ack) flags |= 0x10;
     if(header.rst) flags |= 0x04;
@@ -56,14 +57,20 @@ void Tcp::process(void)
 						std::cout << "Got syn" << std::endl;
 						header.dest_port = pkt.first.source_port;
 						header.ack_num = pkt.first.seq_num;
-						header.seq_num = rand() & 0xFFFF;
+						header.seq_num = rand() & 0xFFFFFFFF;
 						// Send a syn ack
 						header.ack=true;
 						header.rst=false;
 						header.syn=true;
 						header.fin=false;
 
-                        ip->send_tcp(serialise(header), calc_partial_checksum(header));
+						// TODO change
+						header.window_size = 0xFF;
+
+						auto partial_csum = calc_partial_checksum(header);
+                        std::cout << "Partial csum: 0x" << std::hex << ((~partial_csum) & 0xFFFF) << '\n';
+
+                        ip->send_tcp(serialise(header), partial_csum);
 					}
 					break;
 				default:

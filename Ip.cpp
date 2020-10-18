@@ -42,9 +42,9 @@ void Ip::send_tcp(std::vector<uint8_t> data, uint16_t tcp_partial_csum)
     tcp_partial_csum = calc_partial_csum(uint16_t((ip_header[14] << 8) | ip_header[15]), tcp_partial_csum);
     tcp_partial_csum = calc_partial_csum(uint16_t((ip_header[16] << 8) | ip_header[17]), tcp_partial_csum); // Dest addr
     tcp_partial_csum = calc_partial_csum(uint16_t((ip_header[18] << 8) | ip_header[19]), tcp_partial_csum);
-    tcp_partial_csum = calc_partial_csum(uint16_t(ip_header[0]), tcp_partial_csum); // Zeros + prot
+    tcp_partial_csum = calc_partial_csum(uint16_t(ip_header[9]), tcp_partial_csum); // Zeros + prot
     uint16_t tcp_len = data.size();
-    boost::endian::native_to_big_inplace(tcp_len);
+    //boost::endian::native_to_big_inplace(tcp_len);
     tcp_partial_csum = calc_partial_csum(tcp_len, tcp_partial_csum); // TCP length
 
     tcp_partial_csum = ~tcp_partial_csum;
