@@ -46,10 +46,15 @@ void Ip::send_tcp(std::vector<uint8_t> data, uint16_t tcp_partial_csum)
     uint16_t tcp_len = data.size();
     boost::endian::native_to_big_inplace(tcp_len);
     tcp_partial_csum = calc_partial_csum(tcp_len, tcp_partial_csum); // TCP length
-    data.at(16) = ((tcp_partial_csum & 0xFF00) >> 16);
-    data.at(17) = tcp_partial_csum & 0xFF;
 
-	// Calculate checksum
+    tcp_partial_csum = ~tcp_partial_csum;
+
+    std::cout << "tcp checksum: 0x" << std::hex << tcp_partial_csum << '\n';
+
+    data.at(16) = (tcp_partial_csum >> 8) & 0xFF;
+    data.at(17) = (tcp_partial_csum >> 0) & 0xFF;
+
+	// Calculate IP checksum
 	// N.B. Assuming even length
 	uint16_t csum = 0;
 	for(auto i = 0u; i < ip_header.size(); i+=2)
