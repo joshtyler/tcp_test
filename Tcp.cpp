@@ -56,7 +56,7 @@ void Tcp::process(void)
 					{
 						std::cout << "Got syn" << std::endl;
 						header.dest_port = pkt.first.source_port;
-						header.ack_num = pkt.first.seq_num;
+						header.ack_num = pkt.first.seq_num+1;
 						header.seq_num = rand() & 0xFFFFFFFF;
 						// Send a syn ack
 						header.ack=true;
