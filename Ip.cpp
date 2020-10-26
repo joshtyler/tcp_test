@@ -6,8 +6,9 @@
 
 #include "VectorUtility.h"
 
-Ip::Ip(Pcap *pcap)
-	:pcap(pcap)
+Ip::Ip(Pcap *pcap, std::array<4> src_ip)
+	:pcap(pcap),
+	:src_ip(src_ip)
 {
 }
 
@@ -28,14 +29,14 @@ void Ip::send_tcp(std::vector<uint8_t> data, uint16_t tcp_partial_csum)
 	ip_header[9] = 0x06; // Protocol - TCP
 	ip_header[10] = 0x00; //Checksum will go here
 	ip_header[11] = 0x00;
-	ip_header[12] = 127; // From localhost
-	ip_header[13] = 0;
-	ip_header[14] = 0;
-	ip_header[15] = 1;
-	ip_header[16] = 127; // To localhost
-	ip_header[17] = 0;
-	ip_header[18] = 0;
-	ip_header[19] = 1;
+	ip_header[12] = src_ip[0]; // From
+	ip_header[13] = src_ip[1];
+	ip_header[14] = src_ip[2];
+	ip_header[15] = src_ip[3];
+	ip_header[16] = dst_ip[0]; // To
+	ip_header[17] = dst_ip[1];
+	ip_header[18] = dst_ip[2];
+	ip_header[19] = dst_ip[3];
 
 	// Sort out the TCP pseudo header checksum
     tcp_partial_csum = calc_partial_csum(uint16_t((ip_header[12] << 8) | ip_header[13]), tcp_partial_csum); // Source addr
@@ -99,6 +100,13 @@ std::vector<uint8_t> Ip::receive(void)
 						{
 							throw IpException("Vector isn't long enough to contain promised header length");
 						}
+
+                        // Save address so that we know who to send it back to
+                        src_ip[0] = vec[12];
+                        src_ip[0] = vec[13];
+                        src_ip[0] = vec[14];
+                        src_ip[0] = vec[15];
+
 						std::cout << "IP Header:";
 						VectorUtility::print(vec,true);
 						std::cout << std::endl;

@@ -13,6 +13,6 @@ add_executable(tcp_test
         RawSocket.h
         Tcp.cpp
         Tcp.h
-        VectorUtility.h)
+        VectorUtility.h tun.cpp tun.h)
 
 target_link_libraries(tcp_test pcap)

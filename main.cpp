@@ -11,7 +11,7 @@
 int main(void)
 {
 	Pcap pcap;
-	Ip ip(&pcap);
+	Ip ip(&pcap, {0, 0, 0, 0});
 	Tcp tcp(&ip, 9000, true);
 
 	while(true)

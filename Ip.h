@@ -2,8 +2,7 @@
 #define IP_H
 
 #include <stdexcept>
-#include <ios>
-#include <iostream>
+#include <array>
 
 #include "Pcap.h"
 
@@ -15,13 +14,15 @@ struct IpException : std::runtime_error
 class Ip
 {
 public:
-	Ip(Pcap *pcap);
+	Ip(Pcap *pcap, std::array<4> src_ip);
 
 	void send_tcp(std::vector<uint8_t> data, uint16_t tcp_partial_csum);
 	std::vector<uint8_t> receive(void);
 
 private:
 	Pcap *pcap;
+	std::array<uint8_t ,4> src_ip;
+	std::array<uint8_t ,4> dst_ip = {0,0,0,0};
 };
 
 inline uint16_t calc_partial_csum(uint16_t data, uint16_t csum=0)
