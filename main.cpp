@@ -2,16 +2,14 @@
 #include <chrono>
 #include <thread>
 
-#include "VectorUtility.h"
-#include "Pcap.h"
 #include "Ip.h"
 #include "Tcp.h"
 
 
 int main(void)
 {
-	Pcap pcap;
-	Ip ip(&pcap, {0, 0, 0, 0});
+	Tun tun("tun0");
+	Ip ip(&tun, {10, 0, 0, 2});
 	Tcp tcp(&ip, 9000, true);
 
 	while(true)

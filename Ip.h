@@ -3,8 +3,9 @@
 
 #include <stdexcept>
 #include <array>
+#include <iostream>
 
-#include "Pcap.h"
+#include "tun.h"
 
 struct IpException : std::runtime_error
 {
@@ -14,13 +15,13 @@ struct IpException : std::runtime_error
 class Ip
 {
 public:
-	Ip(Pcap *pcap, std::array<4> src_ip);
+	Ip(Tun *interface, std::array<uint8_t, 4> src_ip);
 
 	void send_tcp(std::vector<uint8_t> data, uint16_t tcp_partial_csum);
 	std::vector<uint8_t> receive(void);
 
 private:
-	Pcap *pcap;
+	Tun *interface;
 	std::array<uint8_t ,4> src_ip;
 	std::array<uint8_t ,4> dst_ip = {0,0,0,0};
 };

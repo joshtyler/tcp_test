@@ -9,6 +9,7 @@
 #define TCP_TEST_TUN_H
 
 #include <stdexcept>
+#include <vector>
 
 struct TunException : std::runtime_error
 {
@@ -19,6 +20,9 @@ class Tun
 {
 public:
     Tun(const char *dev_name);
+
+    void send(std::vector<uint8_t> data);
+    std::vector<uint8_t> receive(void);
 
 private:
     int fd;

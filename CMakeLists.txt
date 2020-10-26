@@ -7,8 +7,6 @@ add_executable(tcp_test
         Ip.cpp
         Ip.h
         main.cpp
-        Pcap.cpp
-        Pcap.h
         RawSocket.cpp
         RawSocket.h
         Tcp.cpp

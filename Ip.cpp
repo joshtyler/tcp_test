@@ -6,9 +6,9 @@
 
 #include "VectorUtility.h"
 
-Ip::Ip(Pcap *pcap, std::array<4> src_ip)
-	:pcap(pcap),
-	:src_ip(src_ip)
+Ip::Ip(Tun *interface, std::array<uint8_t,4>  src_ip)
+	:interface(interface),
+	src_ip(src_ip)
 {
 }
 
@@ -69,10 +69,10 @@ void Ip::send_tcp(std::vector<uint8_t> data, uint16_t tcp_partial_csum)
 	data.insert(data.begin(), ip_header.begin(), ip_header.end());
 
 	// Add on an ethernet header
-	std::vector<uint8_t> eth_header = {0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x08,0x00};
-	data.insert(data.begin(), eth_header.begin(), eth_header.end());
+	//std::vector<uint8_t> eth_header = {0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x08,0x00};
+	//data.insert(data.begin(), eth_header.begin(), eth_header.end());
 
-	pcap->send(data);
+    interface->send(data);
 }
 
 std::vector<uint8_t> Ip::receive(void)
@@ -80,45 +80,33 @@ std::vector<uint8_t> Ip::receive(void)
 	std::vector<uint8_t> vec;
 	while(true) // Loop until we either have a valid packet, or we timed out
 	{
-		vec = pcap->receive();
+		vec = interface->receive();
 		if(vec.size() > 0)
 		{
-			// Check if long enough to be an ethernet frame
-			if(vec.size() >= 6*2+2)
-			{
-				//Check if ipv4
-				if(vec[12] == 0x08 && vec[13] == 0x00)
-				{
-					// Erase ethernet header
-					vec.erase(vec.begin(),vec.begin()+6*2+2);
+            // Check if TCP
+            // TODO Properly check if it is for us...
+            if(vec[9] == 0x06) {
+                uint16_t header_len = (vec[0] & 0x0F) * 4;
+                if (vec.size() < header_len) {
+                    throw IpException("Vector isn't long enough to contain promised header length");
+                }
 
-					// Check if TCP
-					if(vec[9] == 0x06)
-					{
-						uint16_t header_len = (vec[0] & 0x0F)*4;
-						if(vec.size() < header_len)
-						{
-							throw IpException("Vector isn't long enough to contain promised header length");
-						}
+                // Save address so that we know who to send it back to
+                dst_ip[0] = vec[12];
+                dst_ip[1] = vec[13];
+                dst_ip[2] = vec[14];
+                dst_ip[3] = vec[15];
 
-                        // Save address so that we know who to send it back to
-                        src_ip[0] = vec[12];
-                        src_ip[0] = vec[13];
-                        src_ip[0] = vec[14];
-                        src_ip[0] = vec[15];
-
-						std::cout << "IP Header:";
-						VectorUtility::print(vec,true);
-						std::cout << std::endl;
-						vec.erase(vec.begin(),vec.begin()+header_len);
-						std::cout << "TCP Header:";
-						VectorUtility::print(vec,true);
-						std::cout << std::endl;
-						// We have a valid packet
-						break;
-					}
-				}
-			}
+                std::cout << "IP Header:";
+                VectorUtility::print(vec, true);
+                std::cout << std::endl;
+                vec.erase(vec.begin(), vec.begin() + header_len);
+                std::cout << "TCP Header:";
+                VectorUtility::print(vec, true);
+                std::cout << std::endl;
+                // We have a valid packet
+                break;
+            }
 		} else {
 			// Break if we have run out of packets
 			break;
