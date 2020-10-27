@@ -55,8 +55,19 @@ private:
 
 	std::pair<Header,std::vector<uint8_t>> deserialise(std::vector<uint8_t> packet);
 
-	std::vector<uint8_t> serialise(Header header, std::vector<uint8_t> data={});
+	std::pair<std::vector<uint8_t>, uint16_t> serialise(std::vector<uint8_t> data={}) const;
 
+	inline uint8_t serialise_flags() const
+    {
+        uint8_t flags =0;
+        if(header.ack) flags |= 0x10;
+        if(header.rst) flags |= 0x04;
+        if(header.syn) flags |= 0x02;
+        if(header.fin) flags |= 0x01;
+        return flags;
+    }
+
+    uint16_t calc_partial_checksum() const;
 
 };
 

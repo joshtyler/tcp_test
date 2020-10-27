@@ -1,4 +1,5 @@
 #include "Tcp.h"
+#include "serdes.h"
 
 #include <iostream>
 #include <cassert>
@@ -11,35 +12,12 @@ Tcp::Tcp(Ip *ip, uint16_t local_port, bool server)
 	header.source_port = local_port;
 }
 
-// Calcluate the checksum of just the TCP portion of the pseudo header
-// See https://en.wikipedia.org/wiki/Transmission_Control_Protocol#TCP_checksum_for_IPv4
-static uint16_t calc_partial_checksum(Tcp::Header header)
-{
-    // N.B. We are sort of duplicating the serialise function
-    // TODO Probably needs a refactor
-    auto csum = calc_partial_csum(header.source_port);
-    csum = calc_partial_csum(header.dest_port,csum);
-    csum = calc_partial_csum(header.seq_num,csum);
-    csum = calc_partial_csum(header.ack_num,csum);
-    uint8_t flags =0;
-    if(header.ack) flags |= 0x10;
-    if(header.rst) flags |= 0x04;
-    if(header.syn) flags |= 0x02;
-    if(header.fin) flags |= 0x01;
-    csum = calc_partial_csum(uint16_t((uint8_t{0x50} << 8) | flags),csum);
-    csum = calc_partial_csum(header.window_size,csum);
-    // Urgent pointer will always be zero
-    // No options
-    return csum;
-
-}
-
 void Tcp::process(void)
 {
 	std::vector<uint8_t> packet;
 	do
 	{
-		packet = ip->receive();
+		packet = ip->receive_tcp();
 		auto pkt = deserialise(packet);
 		if(pkt.first.dest_port == header.source_port)
 		{
@@ -67,10 +45,8 @@ void Tcp::process(void)
 						// TODO change
 						header.window_size = 0xFF;
 
-						auto partial_csum = calc_partial_checksum(header);
-                        std::cout << "Partial csum: 0x" << std::hex << ((~partial_csum) & 0xFFFF) << '\n';
-
-                        ip->send_tcp(serialise(header), partial_csum);
+						auto serialised = serialise();
+                        ip->send_tcp(serialised.first, serialised.second);
 					}
 					break;
 				default:
@@ -88,54 +64,41 @@ void Tcp::process(void)
 std::pair<Tcp::Header,std::vector<uint8_t>> Tcp::deserialise(std::vector<uint8_t> packet)
 {
 	Header header;
-	header.source_port = packet[1] | (packet[0] << 8);
-	header.dest_port   = packet[3] | (packet[2] << 8);
-	header.seq_num     = packet[7] | (packet[6] << 8) | (packet[5]  << 16) | (packet[4]  << 24);
-	header.ack_num     = packet[11] | (packet[10] << 8) | (packet[9] << 16) | (packet[8] << 24);
+	header.source_port = des_from_be<uint16_t>(&packet[0]);
+	header.dest_port   = des_from_be<uint16_t>(&packet[2]);;
+	header.seq_num     = des_from_be<uint32_t>(&packet[4]);;
+	header.ack_num     = des_from_be<uint32_t>(&packet[8]);;
 	header.ack = packet[13] & 0x10;
 	header.rst = packet[13] & 0x04;
 	header.syn = packet[13] & 0x02;
 	header.fin = packet[13] & 0x01;
-	header.window_size  = packet[15] | (packet[14] << 8);
-	header.checksum     = packet[17] | (packet[16] << 8);
+	header.window_size  = des_from_be<uint16_t>(&packet[14]);;
+	header.checksum     = des_from_be<uint16_t>(&packet[16]);;
 
 	uint8_t data_offset_bytes = ((packet[12] & 0xF0) >> 4)*4;
 	packet.erase(packet.begin(),packet.begin()+data_offset_bytes);
 	return std::make_pair(header,packet);
 }
 
-std::vector<uint8_t> Tcp::serialise(Header header, std::vector<uint8_t> data)
+std::pair<std::vector<uint8_t>, uint16_t> Tcp::serialise(std::vector<uint8_t> data) const
 {
-	std::vector<uint8_t> ret;
-	ret.push_back((header.source_port >> 8) & 0xFF);
-	ret.push_back((header.source_port >> 0) & 0xFF);
-	ret.push_back((header.dest_port >> 8) & 0xFF);
-	ret.push_back((header.dest_port >> 0) & 0xFF);
-	ret.push_back((header.seq_num >> 24) & 0xFF);
-	ret.push_back((header.seq_num >> 16) & 0xFF);
-	ret.push_back((header.seq_num >> 8) & 0xFF);
-	ret.push_back((header.seq_num >> 0) & 0xFF);
-	ret.push_back((header.ack_num >> 24) & 0xFF);
-	ret.push_back((header.ack_num >> 16) & 0xFF);
-	ret.push_back((header.ack_num >> 8) & 0xFF);
-	ret.push_back((header.ack_num >> 0) & 0xFF);
-	ret.push_back(0x50);
-	uint8_t flags =0;
-	if(header.ack) flags |= 0x10;
-	if(header.rst) flags |= 0x04;
-	if(header.syn) flags |= 0x02;
-	if(header.fin) flags |= 0x01;
-	ret.push_back(flags);
-	ret.push_back((header.window_size >> 8) & 0xFF);
-	ret.push_back((header.window_size >> 0) & 0xFF);
-	ret.push_back(0x00);
-	ret.push_back(0x00);
-	ret.push_back(0x00);
-	ret.push_back(0x00);
+	std::vector<uint8_t> ret(20);
+    ser_to_be<uint16_t>(&ret[0], header.source_port );
+    ser_to_be<uint16_t>(&ret[2], header.dest_port );
+    ser_to_be<uint32_t>(&ret[4], header.seq_num );
+    ser_to_be<uint32_t>(&ret[8], header.ack_num );
+	ret.at(12) = 0x50; // Data offset. Reserved bits. NS=0
+    ret[13] = serialise_flags();
+    ser_to_be<uint16_t>(&ret[14], header.window_size );
+    ser_to_be<uint16_t>(&ret[16], 0 ); // CRC. Will fill in later
+    ser_to_be<uint16_t>(&ret[18], 0 ); // Urgent pointer
 
-	// Don't bother with checksum for now#
+    // Calcluate the checksum of just the TCP portion of the pseudo header
+    // See https://en.wikipedia.org/wiki/Transmission_Control_Protocol#TCP_checksum_for_IPv4
+    uint16_t csum = calc_partial_csum(ret);
 
+	// Add on the data
 	ret.insert(ret.end(), data.begin(), data.end());
 
-	return ret;
+	return {ret, csum};
 }

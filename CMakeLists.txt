@@ -7,10 +7,8 @@ add_executable(tcp_test
         Ip.cpp
         Ip.h
         main.cpp
-        RawSocket.cpp
-        RawSocket.h
         Tcp.cpp
         Tcp.h
-        VectorUtility.h tun.cpp tun.h)
+        VectorUtility.h tun.cpp tun.h serdes.h)
 
 target_link_libraries(tcp_test pcap)
