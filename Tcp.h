@@ -42,12 +42,9 @@ private:
 	// N.B. for now we don't support closing from the FPGA application, os these states are removed
 	enum class State
 	{
-		CLOSED,
 		LISTEN,
-		SYN_SENT,
 		SYN_RCVD,
 		ESTABLISHED,
-		CLOSE_WAIT,
 		LAST_ACK
 	};
 	State state;
@@ -68,6 +65,8 @@ private:
     }
 
     uint16_t calc_partial_checksum() const;
+
+	void setup_reset(void);
 
 };
 

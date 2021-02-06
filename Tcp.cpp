@@ -1,5 +1,6 @@
 #include "Tcp.h"
 #include "serdes.h"
+#include "VectorUtility.h"
 
 #include <iostream>
 #include <cassert>
@@ -7,9 +8,19 @@
 #include <boost/endian/conversion.hpp>
 
 Tcp::Tcp(Ip *ip, uint16_t local_port, bool server)
-	:ip(ip), server(server), state(State::CLOSED)
+	:ip(ip), server(server), state(State::LISTEN)
 {
 	header.source_port = local_port;
+}
+
+void Tcp::setup_reset(void)
+{
+    std::cout << "Sending reset" << std::endl;
+    header.ack=false;
+    header.rst=true;
+    header.syn=false;
+    header.fin=false;
+    state = State::LISTEN;
 }
 
 void Tcp::process(void)
@@ -20,40 +31,114 @@ void Tcp::process(void)
 		packet = ip->receive_tcp();
 		auto pkt = deserialise(packet);
 		if(pkt.first.dest_port == header.source_port)
-		{
-			std::cout << "Got packet for us!" << std::endl;
-			switch(state)
-			{
-				case State::CLOSED:
-					// For now assert the things we don't handle
-					assert(!pkt.first.ack);
-					assert(!pkt.first.rst);
-					assert(pkt.first.syn);
-					assert(!pkt.first.fin);
-					if(pkt.first.syn)
-					{
-						std::cout << "Got syn" << std::endl;
-						header.dest_port = pkt.first.source_port;
-						header.ack_num = pkt.first.seq_num+1;
-						header.seq_num = rand() & 0xFFFFFFFF;
-						// Send a syn ack
-						header.ack=true;
-						header.rst=false;
-						header.syn=true;
-						header.fin=false;
+        {
+			if(state != State::LISTEN && header.dest_port != pkt.first.source_port) {
+                setup_reset();
+                auto serialised = serialise();
+                ip->send_tcp(serialised.first, serialised.second);
+            } else if(pkt.first.rst) {
+			    state = State::LISTEN;
+            } else {
+                std::cout << "Got packet for us!" << std::endl;
 
-						// TODO change
-						header.window_size = 0xFF;
+                switch (state) {
+                    case State::LISTEN:
+                        if (
+                                (pkt.first.ack)
+                                || (!pkt.first.syn)
+                                || (pkt.first.fin)
+                                ) {
+                            setup_reset();
+                        } else {
+                            std::cout << "Got syn" << std::endl;
+                            header.dest_port = pkt.first.source_port;
+                            header.ack_num = pkt.first.seq_num + 1;
+                            header.seq_num = rand() & 0xFFFFFFFF;
+                            // Send a syn ack
+                            header.ack = true;
+                            header.rst = false;
+                            header.syn = true;
+                            header.fin = false;
 
-						auto serialised = serialise();
-                        ip->send_tcp(serialised.first, serialised.second);
-					}
-					break;
-				default:
-					std::cerr << "Unimplemented state" << std::endl;
-					assert(false);
-			}
+                            // TODO change
+                            header.window_size = 2;
+                            auto serialised = serialise();
+                            ip->send_tcp(serialised.first, serialised.second);
+                            header.seq_num = header.seq_num+1;
+                            state = State::SYN_RCVD;
+                        }
+                        break;
+                    case State::SYN_RCVD:
+                        if (
+                                (!pkt.first.ack)
+                                || (pkt.first.syn)
+                                || (pkt.first.fin)
+                                || (header.ack_num != pkt.first.seq_num) // They shouldn't try and send data before established
+                                ) {
+                            setup_reset();
+                        } else {
+                            std::cout << "Got ack for initial syn ack" << std::endl;
+                            state = State::ESTABLISHED;
+                        }
+                        break;
+                    case State::ESTABLISHED:
+                        if ( pkt.first.syn)
+                        {
+                            setup_reset();
+                        } else {
+                            std::cout << "Got packet in established" << std::endl;
 
+                            bool send = false;
+                            header.ack = false;
+                            header.rst = false;
+                            header.syn = false;
+
+                            if(pkt.second.size())
+                            {
+                                std::cout << "Got data: " << std::endl;
+                                VectorUtility::print(pkt.second);
+                                std::cout << '\n';
+                                // Blindly ack for now
+                                // Also need to add trimming in IP
+                                header.ack_num = pkt.first.seq_num + pkt.second.size();
+                                header.ack = true;
+                                send = true;
+                            }
+
+
+                            header.fin = pkt.first.fin;
+                            if(header.fin)
+                            {
+                                header.ack = true;
+                                send = true;
+                                state = State::LAST_ACK;
+                            }
+                            if(send)
+                            {
+                                auto serialised = serialise();
+                                ip->send_tcp(serialised.first, serialised.second);
+                            }
+                        }
+                        break;
+                    case State::LAST_ACK:
+                        if (
+                        (!pkt.first.ack)
+                        || (pkt.first.syn)
+                        || (pkt.first.fin)
+                        || (header.ack_num != pkt.first.seq_num) // They shouldn't try and send data in last ack
+                        )
+                        {
+                            setup_reset();
+                        } else {
+                            std::cout << "Got last ack" << std::endl;
+                            state = State::LISTEN;
+                        }
+                        break;
+                    default:
+                        std::cerr << "Unimplemented state" << std::endl;
+                        assert(false);
+                }
+            }
 		} else {
 			std::cout << "Got packet for someone else (" << pkt.first.dest_port << ")" << std::endl;
 		}
